@@ -24,7 +24,9 @@ This project is a multiplayer turn-based card game using a **Go backend** and a 
 1. **Set up version control**:
    - Initialize a Git repository.
    - Create a project board with tasks.
-   
+    
+    # Completed 
+    
 2. **Define game architecture**:
    - Plan how the backend will handle game sessions and player states.
    - Decide how WebSockets will be used for real-time communication.

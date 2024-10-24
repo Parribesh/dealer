@@ -1,0 +1,145 @@
+Architecture Overview
+Frontend (JavaScript / React)
+    Purpose: The frontend will handle the user interface, including the card game board, player actions, and interaction with the backend via WebSockets and REST API.
+    Key Components:
+    Card Display: Dynamic rendering of cards in the player's hand and on the game board.
+    Game Board: A visual representation of the game state, including player stats (e.g., health, cards in play).
+    WebSocket Communication: Communicates with the backend for real-time updates, such as player actions and state changes.
+    REST API Integration: Used to retrieve the initial game state, card decks, and other one-time data.
+Backend (Go)
+    Purpose: The backend manages the game logic, user authentication, game state, and communication between players using WebSockets.
+    Key Components:
+    WebSocket Server: Manages real-time communication for player actions and game state synchronization.
+    Game State Manager: Tracks the state of the game (whose turn, card positions, player health, etc.).
+    Card System: Defines the card attributes and handles player actions like drawing cards, playing cards, etc.
+    Authentication & Matchmaking: Handles JWT-based player authentication and pairs players into matches.
+    REST API: Provides initial game data like player stats, card decks, etc., via HTTP endpoints.
+    Game Logic: Implements rules for turns, actions, and victory conditions.
+Communication Layer
+    Purpose: Manages communication between the frontend and backend, ensuring real-time gameplay.
+    Key Components:
+    WebSocket Protocol: Used for real-time communication, sending and receiving messages for player actions and game state updates.
+    REST API: Used for initial game setup (e.g., retrieving the deck of cards, player info).
+
+
+Component Breakdown
+
+    1. Frontend (JavaScript / React)
+        Card UI: Each card is represented as a UI component. Cards can be clicked, dragged, or selected for playing.
+
+        Properties: Attack, Defense, Special Abilities, Cost, etc.
+        States: "In Hand", "On Board", "Discarded".
+        Game Board: Represents both players’ hands and their cards on the battlefield.
+
+        Player UI: Displays player stats, such as health, mana, or any other resource needed to play cards.
+        Turn Management: Displays whose turn it is and allows players to end their turn.
+        Communication:
+
+        WebSocket Handling: Manages sending and receiving messages to/from the server.
+        REST API: Used for initial game setup (e.g., fetching card deck and player data).
+    2. Backend (Go)
+        Game Server (WebSocket-based):
+
+        A WebSocket server will handle real-time communication between players and the server.
+        It will manage game events like "play card", "end turn", "draw card", etc., and broadcast these updates to connected players.
+        Game Logic:
+
+        Implements game rules, such as how cards interact (e.g., attacks, defenses, spell effects).
+        Handles turn-based mechanics and victory conditions.
+        Game State Manager:
+
+        Stores the current state of the game (cards in play, cards in hand, player health, whose turn, etc.).
+        Updates the state based on player actions and broadcasts updates to both players.
+        Player Management:
+
+        Authentication: Handles JWT-based login and validation.
+        Matchmaking: Pairs players into games, either randomly or based on some criteria (e.g., ranking).
+        REST API:
+
+        Exposes endpoints for actions like starting a new game, getting available cards, or checking player stats.
+        Example Endpoints:
+        /api/game/start: Starts a new game and returns initial game state.
+        /api/player/stats: Returns player stats (e.g., health, win/loss ratio).
+    3. Communication Layer
+        WebSocket Protocol:
+        Frontend and backend will use WebSocket communication for real-time gameplay.
+        Key events:
+        play_card: Sent when a player plays a card.
+        end_turn: Sent when a player ends their turn.
+        update_state: Sent when the game state changes (e.g., after a card is played).
+        REST API:
+        Primarily used to get initial game data like player stats, card decks, etc.
+        Game state will be persisted through WebSocket messages, but initial states are fetched via REST API.
+
+
+****************** Main Game Logic **********************
+Sequence Diagram
+    Here’s a high-level sequence of interactions in the game:
+
+    Frontend Initialization:
+
+    User logs in and is authenticated via JWT.
+    The frontend requests the initial game state via a REST API (/api/game/start).
+    Game Start:
+
+    The backend initializes the game, dealing cards to both players and setting the game state.
+    The game state is returned via REST API, and WebSocket connection is established.
+    Real-Time Gameplay:
+
+    Player 1 plays a card.
+    The card play event is sent to the backend via WebSocket.
+    The backend processes the action and updates the game state.
+    The new game state is broadcast to both players via WebSocket.
+    Player 2 receives the updated game state and their UI updates.
+    Turn End:
+
+    When a player ends their turn, the backend updates the turn state and notifies the next player to begin.
+    Directory Structure
+    Here’s an example directory structure for the project:
+
+
+********** Main Project Structure*******8
+Frontend:
+
+graphql
+frontend/
+│
+├── src/
+│   ├── components/
+│   │   ├── Card.js           # Card UI component
+│   │   ├── GameBoard.js      # Game board component
+│   ├── services/
+│   │   ├── WebSocket.js      # Handles WebSocket communication
+│   │   ├── ApiService.js     # Handles REST API calls
+│   ├── App.js                # Main app component
+│   └── index.js              # Entry point for React
+├── public/                   # Public assets (HTML, images)
+└── package.json              # Project dependencies and scripts
+Backend (Go):
+
+graphql
+backend/
+│
+├── cmd/
+│   ├── main.go               # Entry point of the Go application
+├── internal/
+│   ├── game/
+│   │   ├── card.go           # Card attributes and logic
+│   │   ├── player.go         # Player structure and actions
+│   │   ├── game_state.go     # Handles game state management
+│   ├── websocket/
+│   │   ├── handler.go        # WebSocket connection handling
+│   ├── api/
+│   │   ├── routes.go         # API routes for REST endpoints
+├── pkg/
+│   └── auth/
+│       ├── jwt.go            # JWT authentication handling
+├── go.mod                    # Go module and dependencies
+
+
+
+Future Enhancements
+Advanced Game Logic: Support for special abilities, custom decks, and more complex interactions.
+Chat System: Implement a chat system within the WebSocket layer for players to communicate.
+Ranked Mode: Add a ranking system based on players’ wins and losses.
+Database Integration: Persist player stats, deck configurations, and game history using a database (e.g., PostgreSQL).
