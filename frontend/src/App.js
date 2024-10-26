@@ -4,6 +4,7 @@ import JoinLobby from "./components/JoinLobby";
 import Game from "./components/Game";
 import { WebSocketProvider } from "./context/WebSocketContext";
 import { GameStateProvider } from "./context/GameStateContext";
+import { PlayerContextProvider } from "./context/PlayerContext";
 
 function App() {
   return (
@@ -11,10 +12,12 @@ function App() {
       <main>
         <WebSocketProvider>
           <GameStateProvider>
-            <Routes>
-              <Route path="/" element={<JoinLobby />} />
-              <Route path="/game" element={<Game />} />
-            </Routes>
+            <PlayerContextProvider>
+              <Routes>
+                <Route path="/" element={<JoinLobby />} />
+                <Route path="/game" element={<Game />} />
+              </Routes>
+            </PlayerContextProvider>
           </GameStateProvider>
         </WebSocketProvider>
       </main>

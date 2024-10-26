@@ -18,10 +18,9 @@ const useGameState = () => {
     A: 14,
   };
 
-
   const updateGameState = (data) => {
     Object.keys(data.State).map((key) => {
-      if (key !== "turn") {
+      if (key.includes("player")) {
         data.State[key].hand.sort((a, b) => {
           const suitComparison = a.suit.localeCompare(b.suit);
           if (suitComparison !== 0) {
@@ -66,7 +65,42 @@ const useGameState = () => {
     });
   };
 
-  return { gameState, updateGameState, updateHealthState };
+  const updatePlayedCardState = (data) => {
+    setGameState((prevState) => {
+      // Find the key (player1, player2, etc.) where the player's id matches data.player
+      const playerKey = Object.keys(prevState.State).find(
+        (key) => prevState.State[key].id === data.player
+      );
+
+      console.log("Updating played card for player:", data.player);
+      console.log("New played card:", data.played_card);
+      console.log("Matched player key:", playerKey);
+
+      // If the player is found, update their played_card
+      if (playerKey) {
+        return {
+          ...prevState,
+          State: {
+            ...prevState.State,
+            [playerKey]: {
+              ...prevState.State[playerKey],
+              played_card: data.played_card, // Update the played_card value
+            },
+          },
+        };
+      }
+
+      console.log("Player not found for update");
+      return prevState;
+    });
+  };
+
+  return {
+    gameState,
+    updateGameState,
+    updateHealthState,
+    updatePlayedCardState,
+  };
 };
 
 export default useGameState;

@@ -9,8 +9,13 @@ const useWebSocket = (url) => {
   const maxReconnectAttempts = 5;
   const reconnectTimeoutId = useRef(null);
   const tokenRef = useRef(null);
+  const isConnectingRef = useRef(false); // Track if currently connecting
 
   const connect = (token) => {
+    // Prevent multiple connection attempts
+    if (isConnectingRef.current) return;
+    isConnectingRef.current = true;
+
     if (ws) {
       console.log("WebSocket already connected. Disconnecting first.");
       ws.close();
@@ -18,16 +23,16 @@ const useWebSocket = (url) => {
 
     console.log("Connecting to WebSocket...");
     const websocket = new WebSocket(url);
-    // setWs(websocket);
+    setWs(websocket);
     tokenRef.current = token;
 
     websocket.onopen = () => {
       console.log("WebSocket connected successfully");
-      // Send the token message immediately after connection
       const tokenMessage = JSON.stringify({ token: tokenRef.current });
       websocket.send(tokenMessage);
       setIsConnected(true);
       reconnectAttempts.current = 0;
+      isConnectingRef.current = false;
     };
 
     websocket.onmessage = (event) => {
@@ -45,10 +50,8 @@ const useWebSocket = (url) => {
         `WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`
       );
       setIsConnected(false);
+      isConnectingRef.current = false;
       if (event.code === 1005) {
-        console.log(
-          "Received close 1005 (no status). Attempting immediate reconnection."
-        );
         reconnectAttempts.current += 1;
         if (reconnectAttempts.current < maxReconnectAttempts) {
           connect(tokenRef.current);
@@ -74,6 +77,7 @@ const useWebSocket = (url) => {
 
     websocket.onerror = (error) => {
       console.error("WebSocket error:", error);
+      isConnectingRef.current = false;
     };
   };
 
@@ -88,20 +92,16 @@ const useWebSocket = (url) => {
     setWs(null);
     setIsConnected(false);
     tokenRef.current = null;
+    isConnectingRef.current = false;
   }, [ws]);
 
-  useEffect(() => {
-    return () => {
-      disconnect();
-    };
-  }, [disconnect]);
-
-  const sendMessage = useCallback(
+    const sendMessage = useCallback(
     (message) => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws) {
         ws.send(JSON.stringify(message));
       } else {
-        console.error("WebSocket is not open. Unable to send message.");
+        console.error("WebSocket is not open. Attempting to reconnect.");
+        connect(tokenRef.current);
       }
     },
     [ws]
@@ -111,9 +111,9 @@ const useWebSocket = (url) => {
     isConnected,
     lastMessage,
     connect,
-    disconnect,
     sendMessage,
     setUserId,
+    disconnect,
     userId,
   };
 };

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useWebSocketContext } from "../context/WebSocketContext";
 import useGameState from "../hooks/useGameState";
 import { useGameStateContext } from "../context/GameStateContext";
+import { usePlayerContext } from "../context/PlayerContext";
 
 const JoinLobby = () => {
   const [token, setToken] = useState(null);
@@ -11,6 +12,7 @@ const JoinLobby = () => {
   const [connectedPlayers, setConnectedPlayers] = useState([]);
   const [playerName, setPlayerName] = useState("");
   const { gameState, updateGameState } = useGameStateContext();
+  const { player, setPlayer } = usePlayerContext();
   const {
     isConnected,
     lastMessage,
@@ -47,6 +49,7 @@ const JoinLobby = () => {
     if (playerName && token) {
       connect(token);
       setUserId(playerName);
+      setPlayer(playerName);
     }
   }, [playerName, token]);
 
