@@ -17,6 +17,7 @@ type Game struct {
 	GameID    string
 	Players   []string // List of player IDs
 	State     GameState // Game state can be complex or simplified
+	GameWinner *Player
 }
 
 type GameState struct {
@@ -25,12 +26,18 @@ type GameState struct {
 	Player3 Player `json:"player3"`
 	Player4 Player `json:"player4"`
 	Turn    int    `json:"turn"` // Keeps track of which player's turn it is
+	TrickSuit Suit `json:"trick_suit"`
+	RoundWinner *Player `json:"round_winner,omitempty"`
+	Scores      map[string]int   `json:"scores"` // Track scores by player ID
+	Bids        map[string]int   `json:"bids"` 
 }
 
 type Player struct {
 	ID    string  `json:"id"`
 	Hand  []Card  `json:"hand"`
 	Health int    `json:"health"`
+	PlayedCard *Card  `json:"played_card"`
+	Bid      int    `json:"bid"` // Number of tricks the player aims to win
 }
 
 
@@ -60,6 +67,14 @@ const (
 	King  Rank = "K"
 )
 
+// Define a map to quickly get the suit ranking
+var SuitRankings = map[Suit]int{
+    Hearts:   0,
+    Diamonds: 1,
+    Clubs:    2,
+    Spades:   3,
+}
+
 type Card struct {
 	Rank Rank `json:"rank"`
 	Suit Suit `json:"suit"`
@@ -68,6 +83,12 @@ type Card struct {
 // Method to get the card's identifier (e.g., "6D" for Six of Diamonds)
 func (c Card) Identifier() string {
 	return string(c.Rank) + string(c.Suit)
+}
+
+type PlayedCardMessage struct {
+    PlayerID string `json:"player_id"`
+    Card     Card `json:"card"`
+ 
 }
 
 
