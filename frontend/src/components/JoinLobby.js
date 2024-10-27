@@ -5,6 +5,9 @@ import { useWebSocketContext } from "../context/WebSocketContext";
 import useGameState from "../hooks/useGameState";
 import { useGameStateContext } from "../context/GameStateContext";
 import { usePlayerContext } from "../context/PlayerContext";
+import { createComponentLogger } from "../logger";
+
+const log = createComponentLogger("JoinLobby", "info");
 
 const JoinLobby = () => {
   const [token, setToken] = useState(null);
@@ -35,14 +38,14 @@ const JoinLobby = () => {
       setToken(jwtToken);
       setPlayerName(response.data.playerName);
     } catch (error) {
-      console.error("Error joining the lobby:", error);
+      log.error("Error joining the lobby:", error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    console.log("userId set to", userId);
+    log.debug("userId set to", userId);
   }, [userId]);
 
   useEffect(() => {
@@ -54,15 +57,15 @@ const JoinLobby = () => {
   }, [playerName, token]);
 
   useEffect(() => {
-    console.log("JoinLobby: WebSocket connected:", isConnected);
-    console.log("JoinLobby: WebSocket last message:", lastMessage);
+    log.info("JoinLobby: WebSocket connected:", isConnected);
+    log.debug("JoinLobby: WebSocket last message:", lastMessage);
     if (lastMessage) {
       const { type, data } = lastMessage;
-      console.log("JoinLobby: Message type:", type, "Message content:", data);
+      log.debug("JoinLobby: Message type:", type, "Message content:", data);
 
       switch (type.toLowerCase()) {
         case "gamestate":
-          console.log("JoinLobby: Game started, navigating with state:", data);
+          log.debug("JoinLobby: Game started, navigating with state:", data);
           updateGameState(data);
           navigate("/game");
           break;
@@ -75,14 +78,14 @@ const JoinLobby = () => {
           break;
         case "roomcreated":
           // Handle room creation if needed
-          console.log("Room created:", data);
+          log.debug("Room created:", data);
           navigate("/game", { state: { initialGameState: data } });
           break;
         case "message":
           setLastReceivedMessage(data);
           break;
         default:
-          console.log("Unhandled message type:", type);
+          log.error("Unhandled message type:", type);
       }
     }
   }, [lastMessage, navigate, isConnected]);

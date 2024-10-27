@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createComponentLogger } from "../logger";
+
+const log = createComponentLogger("useWebSocket", "info")
 
 const useWebSocket = (url) => {
   const [ws, setWs] = useState(null);
@@ -17,17 +20,17 @@ const useWebSocket = (url) => {
     isConnectingRef.current = true;
 
     if (ws) {
-      console.log("WebSocket already connected. Disconnecting first.");
+      log.warn("WebSocket already connected. Disconnecting first.");
       ws.close();
     }
 
-    console.log("Connecting to WebSocket...");
+    log.info("Connecting to WebSocket...");
     const websocket = new WebSocket(url);
     setWs(websocket);
     tokenRef.current = token;
 
     websocket.onopen = () => {
-      console.log("WebSocket connected successfully");
+      log.info("WebSocket connected successfully");
       const tokenMessage = JSON.stringify({ token: tokenRef.current });
       websocket.send(tokenMessage);
       setIsConnected(true);
@@ -36,17 +39,17 @@ const useWebSocket = (url) => {
     };
 
     websocket.onmessage = (event) => {
-      console.log("WebSocket message received:", event.data);
+      log.debug("WebSocket message received:", event.data);
       try {
         const message = JSON.parse(event.data);
         setLastMessage(message);
       } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
+        log.error("Error parsing WebSocket message:", error);
       }
     };
 
     websocket.onclose = (event) => {
-      console.log(
+      log.info(
         `WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`
       );
       setIsConnected(false);
@@ -56,7 +59,7 @@ const useWebSocket = (url) => {
         if (reconnectAttempts.current < maxReconnectAttempts) {
           connect(tokenRef.current);
         } else {
-          console.log("Max reconnect attempts reached. Stopping reconnection.");
+          log.info("Max reconnect attempts reached. Stopping reconnection.");
         }
       } else {
         reconnectAttempts.current += 1;
@@ -70,20 +73,20 @@ const useWebSocket = (url) => {
             reconnectDelay
           );
         } else {
-          console.log("Max reconnect attempts reached. Stopping reconnection.");
+          log.info("Max reconnect attempts reached. Stopping reconnection.");
         }
       }
     };
 
     websocket.onerror = (error) => {
-      console.error("WebSocket error:", error);
+      log.error("WebSocket error:", error);
       isConnectingRef.current = false;
     };
   };
 
   const disconnect = useCallback(() => {
     if (ws) {
-      console.log("Closing WebSocket connection");
+      log.info("Closing WebSocket connection");
       ws.close();
     }
     if (reconnectTimeoutId.current) {
@@ -95,7 +98,7 @@ const useWebSocket = (url) => {
     isConnectingRef.current = false;
   }, [ws]);
 
-    const sendMessage = useCallback(
+  const sendMessage = useCallback(
     (message) => {
       if (ws) {
         ws.send(JSON.stringify(message));

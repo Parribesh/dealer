@@ -4,13 +4,15 @@ import { useWebSocketContext } from "../context/WebSocketContext";
 import styled from "styled-components";
 import { useGameStateContext } from "../context/GameStateContext";
 import { usePlayerContext } from "../context/PlayerContext";
+import { createComponentLogger } from "../logger";
 
+const log = createComponentLogger("GameContainer", "debug");
 const GameContainer = styled.div`
   background: #1a1a2e;
   color: #ffffff;
   font-family: "Arial", sans-serif;
   padding: 20px;
-  min-height: 100vh;
+  min-height: calc(100vh-50px);
   position: relative;
 `;
 
@@ -164,8 +166,8 @@ const Game = () => {
       type: "acknowledgment",
       playerId: playerId,
     };
-    console.log("isConnected: ", isConnected);
-    console.log("Sending Ack: ");
+    log.debug("isConnected: ", isConnected);
+    log.debug("Sending Ack: ");
     sendMessage(acknowledgment);
   };
 
@@ -173,6 +175,7 @@ const Game = () => {
     if (lastMessage) {
       const { type, data } = lastMessage;
       if (type.toLowerCase() === "gamestate") {
+        log.debug("updating game state", data);
         updateGameState(data);
         acknowledgeGameState(player);
       }
@@ -181,15 +184,21 @@ const Game = () => {
       }
       if (type.toLowerCase() === "trickwon") {
         // updateHealthState(data);
-        console.log("trick won. Setting cards null...");
+        log.info("trick won. Setting cards null...");
         setSelectedCards({});
       }
       if (type.toLowerCase() === "cardplayed") {
         // updateHealthState(data);
+        log.debug("cardplayed: ", data.card);
+        log.debug("player: ", data.playerId);
+
         setSelectedCards((prevSelectedCards) => ({
           ...prevSelectedCards,
           [data.playerId]: data.card,
         }));
+      }
+      if (type.toLowerCase() === "resetcardplayed") {
+        setSelectedCards({});
       }
       if (type.toLowerCase() === "trickwon") {
         // updateHealthState(data);
@@ -199,13 +208,13 @@ const Game = () => {
   }, [lastMessage]);
 
   useEffect(() => {
-    console.log("game state after health update: ", gameState);
+    // log.debug("game state after health update: ", gameState);
   }, [gameState]);
 
   const isCurrentPlayer = (playerId) => userId === playerId;
 
   const handleCardClick = async (card, playerId) => {
-    console.log("card is being processed hold on... ");
+    log.debug("card is being processed hold on... ");
 
     // Construct the move data (message body)
     const moveData = {
@@ -229,9 +238,9 @@ const Game = () => {
       }
 
       const responseData = await response.text();
-      console.log("Response from server:", responseData);
+      log.debug("Response from server:", responseData);
     } catch (error) {
-      console.error("Error sending move:", error);
+      log.error("Error sending move:", error);
     }
   };
 
@@ -306,11 +315,12 @@ const Game = () => {
               let selectedCard = "";
               if (selectedCards && selectedCards[playerId]) {
                 selectedCard = selectedCards[playerId];
+                // log.debug("selectedCard: ", selectedCard);
                 // Proceed with your logic
               } else {
-                console.warn(
-                  `selectedCards is either null or ${playerId} is not present.`
-                );
+                // console.warn(
+                // `selectedCards is either null or ${playerId} is not present.`
+                //);
               }
 
               return (

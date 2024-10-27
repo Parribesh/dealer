@@ -77,6 +77,7 @@ func processPlayedCard(game *models.Game, currentPlayer *models.Player) {
     }
 
     // Apply other game logic for the played card
+    
 }
 
 func allPlayersHavePlayed(game *models.Game) bool {
@@ -117,13 +118,15 @@ func HandlePlayerMove(gameID string, playerID string, message []byte) {
         return
     }
 
-    // Update the current player's PlayedCard
-    currentPlayer.PlayedCard = &models.Card{
-        Suit: playedCardMsg.Card.Suit,
-        Rank: playedCardMsg.Card.Rank,
+    // Find the card in the player's hand to set as PlayedCard
+    for i, card := range currentPlayer.Hand {
+        if card.Suit == playedCardMsg.Card.Suit && card.Rank == playedCardMsg.Card.Rank {
+            // Assign the address of the existing card in hand to PlayedCard
+            currentPlayer.PlayedCard = &currentPlayer.Hand[i]
+            fmt.Println("Player", playerID, "played a card:", currentPlayer.PlayedCard)
+            return
+        }
     }
-
-    fmt.Println("Player", playerID, "played a card:", currentPlayer.PlayedCard)
 }
 
 func getPlayerByID(game *models.Game, playerID string) *models.Player {
@@ -213,7 +216,7 @@ func determineTrickWinner(state *models.GameState) *models.Player {
 }
 
 // updateGameStateAfterTrick updates the game state after a trick is completed
-func updateGameStateAfterTrick(game *models.Game, winner *models.Player) {
+func updateGameStateAfterTrick(game *models.Game, winner *models.Player, connections map[string]*websocket.Conn) {
     // Update the round winner in the GameState
     game.State.RoundWinner = winner
 
@@ -225,18 +228,20 @@ func updateGameStateAfterTrick(game *models.Game, winner *models.Player) {
     game.State.Scores[winner.ID]++
 
     // Optional: Reset played cards for the next trick
-    resetPlayedCards(&game.State)
+    resetPlayedCards(game, connections)
 
     // Debug log to confirm the updates
     fmt.Printf("Updated game state: round winner is %s, new score is %d\n", winner.ID, game.State.Scores[winner.ID])
 }
 
 // resetPlayedCards resets the PlayedCard for all players in the game state
-func resetPlayedCards(state *models.GameState) {
-    state.Player1.PlayedCard = nil
-    state.Player2.PlayedCard = nil
-    state.Player3.PlayedCard = nil
-    state.Player4.PlayedCard = nil
+func resetPlayedCards(game *models.Game, connections map[string]*websocket.Conn) {
+	game.State.Player1.RemovePlayedCard()
+    game.State.Player2.RemovePlayedCard()
+    game.State.Player3.RemovePlayedCard()
+    game.State.Player4.RemovePlayedCard()
+	game.State.TrickSuit = ""
+	broadcastAndAck(game, connections, "resetcardplayed" )
 }
 
 
@@ -330,60 +335,39 @@ func gameLoop(game *models.Game, connections map[string]*websocket.Conn) {
 
 		// Validate the played card against the rules
 		if isValidCard(currentPlayer, game.State.TrickSuit, game.State) {
-
-            
-			// Broadcast the updated game state with the played card
-			broadcastGameState(game, connections, "gamestate")
-            // Wait for acknowledgment for the game state change
-			acknowledgmentReceived := waitForAllAcknowledgments(connections)
-			if acknowledgmentReceived {
-				fmt.Println("Acknowledgment received for game state change.")
-				
-				// Now broadcast the card played message
-				broadcastGameState(game, connections, "cardplayed")
-			} else {
-				fmt.Println("No acknowledgment received for game state change. Handling timeout...")
-				// Handle the case where acknowledgment is not received
-				// You might want to prompt the player again or log the incident
-				continue // Optionally skip the cardplayed broadcast if no ack received
-			}
-
-
+			broadcastGameState(game, connections, "cardplayed")
 		} else {
 			// Handle invalid card case (e.g., reset card or prompt the player again)
 			fmt.Println("Invalid card played")
 			continue
 		}
-
-
 		// Check if all players have played a card (end of trick)
 		if allPlayersHavePlayed(game) {
 			// Determine the winner of the trick based on the leading suit and trump cards
 			winner := determineTrickWinner(&game.State)
 			// Update game state, increment the winner's trick count
-			updateGameStateAfterTrick(game, winner)
-			broadcastGameState(game, connections, "gamestate")
-            acknowledgmentReceived := waitForAllAcknowledgments(connections)
-			if acknowledgmentReceived {
-				fmt.Println("Acknowledgment received for game state change.")
-				
-				// Now broadcast the card played message
-				broadcastGameState(game, connections, "trickwon")
-			} else {
-				fmt.Println("No acknowledgment received for game state change. Handling timeout...")
-				// Handle the case where acknowledgment is not received
-				// You might want to prompt the player again or log the incident
-				continue // Optionally skip the cardplayed broadcast if no ack received
-			}
-			
+			updateGameStateAfterTrick(game, winner, connections)
+			broadcastAndAck(game, connections, "trickwon")
+			broadcastAndAck(game, connections, "gamestate")
 		}
-
 		// Move to the next player's turn
 		advanceTurn(game)
 		resetHealthForNextTurn(game)
 	}
 }
 
+func broadcastAndAck(game *models.Game, connections map[string]*websocket.Conn, broadcastType string){
+	broadcastGameState(game, connections, broadcastType)
+            acknowledgmentReceived := waitForAllAcknowledgments(connections)
+			if acknowledgmentReceived {
+				fmt.Println("Acknowledgment received for ", broadcastType)
+				
+			} else {
+				fmt.Println("No acknowledgment received for game state change. Handling timeout...")
+				// Handle the case where acknowledgment is not received
+				// You might want to prompt the player again or log the incident
+			}
+}
 
 func broadcastGameState(game *models.Game, connections map[string]*websocket.Conn, stateType string) {
 	
@@ -433,7 +417,12 @@ func broadcastGameState(game *models.Game, connections map[string]*websocket.Con
 		message = map[string]interface{}{
 			"type": stateType,
 		}
+    }else if stateType == "resetcardplayed" {
+		message = map[string]interface{}{
+			"type": stateType,
+		}
     }
+	
 	
 	jsonMessage, err := json.Marshal(message)
 	if err != nil {

@@ -40,6 +40,37 @@ type Player struct {
 	Bid      int    `json:"bid"` // Number of tricks the player aims to win
 }
 
+// RemovePlayedCard removes the played card from the player's hand
+func (p *Player) RemovePlayedCard() {
+	fmt.Println("Remove requested....")
+    if p.PlayedCard == nil {
+        fmt.Println("No played card to remove.")
+        return
+    }
+
+   fmt.Printf("Played card before removal: %+v, Address: %p\n", p.PlayedCard, p.PlayedCard)
+
+    // Find the index of PlayedCard in Hand
+    for i := range p.Hand {
+        // Compare the values of the card
+        if p.Hand[i].Suit == p.PlayedCard.Suit && p.Hand[i].Rank == p.PlayedCard.Rank {
+            // Capture the card to log it before removal
+            removedCard := p.Hand[i]
+
+            // Remove the card at index i
+            p.Hand = append(p.Hand[:i], p.Hand[i+1:]...)
+            fmt.Printf("Removed %s from hand.\n", removedCard)
+
+            // Optionally reset PlayedCard to nil
+            p.PlayedCard = nil // Reset the pointer to nil
+            return
+        }
+    }
+
+    fmt.Println("Played card not found in hand.")
+}
+
+
 
 type Suit string
 type Rank string

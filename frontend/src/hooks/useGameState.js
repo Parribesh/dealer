@@ -1,5 +1,9 @@
 import React, { useState } from "react";
 
+import { createComponentLogger } from "../logger";
+
+const log = createComponentLogger("useGameState", "info");
+
 const useGameState = () => {
   const [gameState, setGameState] = useState(null);
   const rankOrder = {
@@ -42,9 +46,9 @@ const useGameState = () => {
         (key) => prevState.State[key].id === data.player
       );
 
-      console.log("Updating health for player:", data.player);
-      console.log("Player Health:", data.health);
-      console.log("Matched player key:", playerKey);
+      log.debug("Updating health for player:", data.player);
+      log.debug("Player Health:", data.health);
+      log.debug("Matched player key:", playerKey);
 
       // If the player is found, update their health
       if (playerKey) {
@@ -60,7 +64,7 @@ const useGameState = () => {
         };
       }
 
-      console.log("Player not found for update");
+      log.error("Player not found for update");
       return prevState;
     });
   };
@@ -72,9 +76,9 @@ const useGameState = () => {
         (key) => prevState.State[key].id === data.player
       );
 
-      console.log("Updating played card for player:", data.player);
-      console.log("New played card:", data.played_card);
-      console.log("Matched player key:", playerKey);
+      log.debug("Updating played card for player:", data.player);
+      log.debug("New played card:", data.played_card);
+      log.debug("Matched player key:", playerKey);
 
       // If the player is found, update their played_card
       if (playerKey) {
@@ -90,7 +94,7 @@ const useGameState = () => {
         };
       }
 
-      console.log("Player not found for update");
+      log.error("Player not found for update");
       return prevState;
     });
   };

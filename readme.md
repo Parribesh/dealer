@@ -21,3 +21,10 @@ This project is a multiplayer turn-based card game using a **Go backend** and a 
 2. Install Go dependencies:
    ```bash
    go mod tidy
+
+### **Issues**:
+   1. Frontend sucks, should work on that one
+   2. When a card is played, the card is still in hand, should take that one off. 
+
+## **Currently Working **:
+ 1. getting the card off the hand 
