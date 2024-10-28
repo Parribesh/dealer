@@ -5,15 +5,20 @@ import styled from "styled-components";
 import { useGameStateContext } from "../context/GameStateContext";
 import { usePlayerContext } from "../context/PlayerContext";
 import { createComponentLogger } from "../logger";
+import Scoreboard from "./ScoreBoard";
 
-const log = createComponentLogger("GameContainer", "debug");
+const log = createComponentLogger("GameContainer", "info");
+
 const GameContainer = styled.div`
   background: #1a1a2e;
   color: #ffffff;
   font-family: "Arial", sans-serif;
   padding: 20px;
-  min-height: calc(100vh-50px);
+  min-height: calc(100vh - 50px);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 `;
 
 const GameHeader = styled.div`
@@ -21,6 +26,7 @@ const GameHeader = styled.div`
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  width: 100%;
 `;
 
 const GameID = styled.h1`
@@ -36,29 +42,23 @@ const TurnIndicator = styled.div`
 `;
 
 const PlayersContainer = styled.div`
-  position: relative;
-  width: 100%;
-  height: calc(100vh);
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 20px;
+  gap: 40px;
 `;
 
 const PlayerSection = styled.div`
   background: #0f3460;
   border-radius: 10px;
-  padding: 20px;
-  position: absolute;
-  width: 200px;
-`;
-
-const PlayerHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
+  padding: 10px;
+  width: 150px;
+  text-align: center;
 `;
 
 const PlayerName = styled.h2`
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
 `;
 
 const HealthBar = styled.div`
@@ -67,12 +67,34 @@ const HealthBar = styled.div`
   height: 10px;
   border-radius: 5px;
   transition: width 0.5s ease-in-out;
+  margin-top: 5px;
 `;
 
-const HandContainer = styled.div`
+const CentralArea = styled.div`
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #16213e;
+  border-radius: 15px;
+  height: 500px;
+  width: 500px;
+  margin: 20px 0;
+`;
+
+const DeckGrid = styled.div`
+  display: flex;
+
+  align-items: center;
   gap: 10px;
+  flex: 1;
+`;
+
+const CardContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 20px;
 `;
 
 const Card = styled.div`
@@ -83,8 +105,8 @@ const Card = styled.div`
       : props.suit === "H" || props.suit === "D"
       ? "#e94560"
       : "#16213e"};
-  width: 40px;
-  height: 60px;
+  width: 80px;
+  height: 120px;
   border-radius: 5px;
   display: flex;
   justify-content: center;
@@ -92,84 +114,27 @@ const Card = styled.div`
   font-weight: bold;
   font-size: 16px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  cursor: pointer; /* Change the cursor to indicate clickable cards */
+  cursor: pointer;
 `;
 
-const CentralArea = styled.div`
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 550px;
-  height: 500px;
+const BottomRow = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 10px;
   background: #16213e;
-  display: flex;
-  justify-content: center;
-  align-items: center;
   border-radius: 15px;
-`;
-
-const DeckCard = styled.div`
-  background: #ffffff;
-  width: 80px;
-  height: 120px;
-  border-radius: 5px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 24px;
-  font-weight: bold;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-`;
-
-// Styled components for the grid layout
-const DeckGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr); // Adjust columns as needed
-  gap: 10px; // Space between cards
-`;
-
-const CardContainer = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100px; // Adjust height as needed
-  width: 100px; // Adjust width as needed
-`;
-const PlayerId = styled.div`
-  font-weight: bold; // Make the text bold
-  text-align: center; // Center the text
-  margin-bottom: 5px; // Space between player ID and card
+  gap: 10px;
+  position: absolute;
+  bottom: 20px;
 `;
 
 const Game = () => {
-  const location = useLocation();
-  const {
-    gameState,
-    updateGameState,
-    updateHealthState,
-    updatePlayedCardState,
-  } = useGameStateContext();
-  const { lastMessage, isConnected, userId, sendMessage } =
-    useWebSocketContext();
+  const { gameState, updateGameState, updateHealthState } =
+    useGameStateContext();
+  const { lastMessage, userId, sendMessage } = useWebSocketContext();
   const { player, setPlayer } = usePlayerContext();
-  const [selectedCards, setSelectedCards] = useState({}); // Step 1: State for selected card
-
-  useEffect(() => {
-    if (!gameState) {
-      // Request initial game state here
-    }
-  }, []);
-
-  const acknowledgeGameState = (playerId) => {
-    const acknowledgment = {
-      type: "acknowledgment",
-      playerId: playerId,
-    };
-    log.debug("isConnected: ", isConnected);
-    log.debug("Sending Ack: ");
-    sendMessage(acknowledgment);
-  };
+  const [selectedCards, setSelectedCards] = useState({});
+  const [trickWinner, setTrickWinner] = useState(null);
 
   useEffect(() => {
     if (lastMessage) {
@@ -203,52 +168,33 @@ const Game = () => {
       if (type.toLowerCase() === "trickwon") {
         // updateHealthState(data);
         setSelectedCards(null);
+        setTrickWinner(data.player);
       }
     }
   }, [lastMessage]);
 
-  useEffect(() => {
-    // log.debug("game state after health update: ", gameState);
-  }, [gameState]);
-
-  const isCurrentPlayer = (playerId) => userId === playerId;
+  const acknowledgeGameState = (playerId) => {
+    sendMessage({ type: "acknowledgment", playerId });
+  };
 
   const handleCardClick = async (card, playerId) => {
-    log.debug("card is being processed hold on... ");
-
-    // Construct the move data (message body)
-    const moveData = {
-      card, // Include the card information (you can customize this based on your requirements)
-    };
-
+    const moveData = { card };
     try {
       const response = await fetch(
         `http://localhost:8080/game/move?gameID=${gameState.GameID}&playerID=${playerId}`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json", // Specify the content type as JSON
-          },
-          body: JSON.stringify(moveData), // Convert the moveData object to a JSON string
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(moveData),
         }
       );
-
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
-      }
-
-      const responseData = await response.text();
-      log.debug("Response from server:", responseData);
+      if (!response.ok) throw new Error("Network response was not ok");
     } catch (error) {
       log.error("Error sending move:", error);
     }
   };
 
-  if (!gameState) {
-    return <div>Loading game state...</div>;
-  }
-
-  const { GameID, Players, State } = gameState;
+  const { GameID, Players, State } = gameState || {};
 
   const getSuitSymbol = (suit) => {
     switch (suit) {
@@ -265,88 +211,81 @@ const Game = () => {
     }
   };
 
+  if (!gameState) {
+    return <div>Loading game state...</div>;
+  }
+
   return (
     <GameContainer>
       <GameHeader>
         <GameID>Game: {GameID}</GameID>
-        <div>Your are: {userId}</div>
+        <div>Player: {player.id}</div>
         <TurnIndicator>Turn: {State.turn}</TurnIndicator>
       </GameHeader>
 
       <PlayersContainer>
         {Players.map((playerId, index) => {
           const player = State[`player${index + 1}`];
-          const playerPosition =
-            index === 0
-              ? { top: "5%", left: "5%" } // Top-left
-              : index === 1
-              ? { top: "5%", right: "5%" } // Top-right
-              : index === 2
-              ? { bottom: "5%", left: "5%" } // Bottom-left
-              : { bottom: "5%", right: "5%" }; // Bottom-right
-
           return (
-            <PlayerSection key={playerId} style={playerPosition}>
-              <PlayerHeader>
-                <PlayerName>{player.id}</PlayerName>
-                <HealthBar health={player.health} />
-              </PlayerHeader>
-              <HandContainer>
-                {player.hand.map((card, cardIndex) => (
-                  <Card
-                    key={cardIndex}
-                    suit={card.suit}
-                    hidden={!isCurrentPlayer(player.id)}
-                    onClick={() => handleCardClick(card, player.id)} // Add onClick event
-                  >
-                    {!isCurrentPlayer(player.id)
-                      ? "🂠"
-                      : `${card.rank}${getSuitSymbol(card.suit)}`}
-                  </Card>
-                ))}
-              </HandContainer>
+            <PlayerSection key={playerId}>
+              <PlayerName>{player.id}</PlayerName>
+              <HealthBar health={player.health} />
+              {player.health} <br></br>
+              Score: {player.score}
             </PlayerSection>
           );
         })}
-
-        <CentralArea>
-          <DeckGrid>
-            {Players.map((playerId) => {
-              let selectedCard = "";
-              if (selectedCards && selectedCards[playerId]) {
-                selectedCard = selectedCards[playerId];
-                // log.debug("selectedCard: ", selectedCard);
-                // Proceed with your logic
-              } else {
-                // console.warn(
-                // `selectedCards is either null or ${playerId} is not present.`
-                //);
-              }
-
-              return (
-                <CardContainer key={playerId}>
-                  <PlayerId>{playerId}</PlayerId> {/* Display the player ID */}
-                  {selectedCard ? (
-                    <Card
-                      suit={selectedCard.suit}
-                      hidden={false} // Show the selected card
-                    >
-                      {`${selectedCard.rank}${getSuitSymbol(
-                        selectedCard.suit
-                      )}`}
-                    </Card>
-                  ) : (
-                    <Card suit={null} hidden={true}>
-                      {/* Placeholder for no card selected */}
-                      🂠
-                    </Card>
-                  )}
-                </CardContainer>
-              );
-            })}
-          </DeckGrid>
-        </CentralArea>
       </PlayersContainer>
+
+      <CentralArea>
+        {trickWinner && (
+          <>
+            <div>Winner {trickWinner.id}</div>
+            <div>Score {trickWinner.score}</div>
+          </>
+        )}
+        <DeckGrid>
+          {Players.map((playerId) => {
+            let selectedCard = "";
+            if (selectedCards && selectedCards[playerId]) {
+              selectedCard = selectedCards[playerId];
+              log.debug("selectedCard: ", selectedCard);
+              // Proceed with your logic
+            } else {
+              // console.warn(
+              // selectedCards is either null or ${playerId} is not present.
+              //);
+            }
+            return (
+              <CardContainer key={playerId}>
+                <div>{playerId}</div>
+                {selectedCard ? (
+                  <Card suit={selectedCard.suit} hidden={false}>
+                    {`${selectedCard.rank}${getSuitSymbol(selectedCard.suit)}`}
+                  </Card>
+                ) : (
+                  <Card hidden={true}>🂠</Card>
+                )}
+              </CardContainer>
+            );
+          })}
+        </DeckGrid>
+        <Scoreboard gameState={gameState} />
+      </CentralArea>
+
+      <BottomRow>
+        {State[`player${Players.indexOf(userId) + 1}`]?.hand.map(
+          (card, index) => (
+            <Card
+              key={index}
+              suit={card.suit}
+              onClick={() => handleCardClick(card, userId)}
+            >
+              {`${card.rank}${getSuitSymbol(card.suit)}`}
+            </Card>
+          )
+        )}
+      </BottomRow>
     </GameContainer>
   );
 };

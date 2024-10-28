@@ -38,6 +38,7 @@ type Player struct {
 	Health int    `json:"health"`
 	PlayedCard *Card  `json:"played_card"`
 	Bid      int    `json:"bid"` // Number of tricks the player aims to win
+	Score int `json:"score"`
 }
 
 // RemovePlayedCard removes the played card from the player's hand

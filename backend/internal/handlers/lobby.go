@@ -22,8 +22,8 @@ func GenerateRandomUsername() string {
 
 func JoinHandler(w http.ResponseWriter, r *http.Request) {
     // Generate a random username
-    username := GenerateRandomUsername()
-    
+    username := r.URL.Query().Get("username")
+
     // Set the response header to indicate JSON content
     w.Header().Set("Content-Type", "application/json")
     

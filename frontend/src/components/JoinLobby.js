@@ -32,11 +32,12 @@ const JoinLobby = () => {
   const joinLobby = async () => {
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:8080/lobby/join");
+      const response = await axios.post(
+        `http://localhost:8080/lobby/join?username=${playerName}`
+      );
       const jwtToken = response.data.token;
       localStorage.setItem("jwtToken", jwtToken);
       setToken(jwtToken);
-      setPlayerName(response.data.playerName);
     } catch (error) {
       log.error("Error joining the lobby:", error);
     } finally {
@@ -52,7 +53,6 @@ const JoinLobby = () => {
     if (playerName && token) {
       connect(token);
       setUserId(playerName);
-      setPlayer(playerName);
     }
   }, [playerName, token]);
 
@@ -67,8 +67,31 @@ const JoinLobby = () => {
         case "gamestate":
           log.debug("JoinLobby: Game started, navigating with state:", data);
           updateGameState(data);
+
+          // Find and set the player that matches the userId
+          const playerFields = ["player1", "player2", "player3", "player4"];
+          let matchedPlayer = null;
+
+          for (const field of playerFields) {
+            const user = data.State[field];
+            log.debug("for user: ", user);
+            log.debug("to match userId: ", userId);
+            if (user && user.id === userId) {
+              log.debug("matched..", user);
+              matchedPlayer = user;
+              break; // Exit the loop once the player is found
+            }
+          }
+
+          if (matchedPlayer) {
+            setPlayer(matchedPlayer);
+          } else {
+            log.error("Player not found for the provided userId:", userId);
+          }
+
           navigate("/game");
           break;
+
         case "playerlist":
           setConnectedPlayers(data);
           break;
@@ -118,6 +141,14 @@ const JoinLobby = () => {
         height: "100vh",
       }}
     >
+      <div>
+        <label>Username:</label>
+        <input
+          type="text"
+          placeholder="What is your name?"
+          onChange={(e) => setPlayerName(e.target.value)}
+        />
+      </div>
       {!token ? (
         <button onClick={joinLobby} disabled={loading}>
           {loading ? (

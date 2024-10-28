@@ -219,7 +219,7 @@ func determineTrickWinner(state *models.GameState) *models.Player {
 func updateGameStateAfterTrick(game *models.Game, winner *models.Player, connections map[string]*websocket.Conn) {
     // Update the round winner in the GameState
     game.State.RoundWinner = winner
-
+	winner.Score +=1
     // Increment the winner's score
     if game.State.Scores == nil {
         game.State.Scores = make(map[string]int)
@@ -416,6 +416,10 @@ func broadcastGameState(game *models.Game, connections map[string]*websocket.Con
     } else if stateType == "trickwon" {
 		message = map[string]interface{}{
 			"type": stateType,
+			"data": map[string]interface{}{
+				"player": game.State.RoundWinner,  // Use current player ID
+				"score": game.State.RoundWinner.Score,
+			}, 
 		}
     }else if stateType == "resetcardplayed" {
 		message = map[string]interface{}{
