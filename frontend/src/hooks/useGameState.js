@@ -22,6 +22,37 @@ const useGameState = () => {
     A: 14,
   };
 
+  const updateBidState = ({ playerId, bid }) => {
+    log.debug("this is the gamestate", gameState);
+    setGameState((prevGame) => ({
+      ...prevGame,
+      State: {
+        ...prevGame.State,
+        bids: {
+          ...prevGame.State.bids,
+          [playerId]: bid, // Update the bid for the specified player in the bids map
+        },
+        // Update the specific player's bid within the Player objects in GameState
+        player1:
+          prevGame.State.player1.id === playerId
+            ? { ...prevGame.State.player1, bid }
+            : prevGame.State.player1,
+        player2:
+          prevGame.State.player2.id === playerId
+            ? { ...prevGame.State.player2, bid }
+            : prevGame.State.player2,
+        player3:
+          prevGame.State.player3.id === playerId
+            ? { ...prevGame.State.player3, bid }
+            : prevGame.State.player3,
+        player4:
+          prevGame.State.player4.id === playerId
+            ? { ...prevGame.State.player4, bid }
+            : prevGame.State.player4,
+      },
+    }));
+  };
+
   const updateGameState = (data) => {
     Object.keys(data.State).map((key) => {
       if (key.includes("player")) {
@@ -104,6 +135,7 @@ const useGameState = () => {
     updateGameState,
     updateHealthState,
     updatePlayedCardState,
+    updateBidState,
   };
 };
 

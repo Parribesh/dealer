@@ -5,6 +5,7 @@ import (
 	"dealer-backend/internal/auth"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 )
@@ -22,8 +23,12 @@ func GenerateRandomUsername() string {
 
 func JoinHandler(w http.ResponseWriter, r *http.Request) {
     // Generate a random username
-    username := r.URL.Query().Get("username")
-
+    username := r.URL.Query().Get("username") 
+    if username == "" {
+        username = GenerateRandomUsername() 
+    }
+    // username:= "random"    
+    log.Printf("Username set to: %s", username)
     // Set the response header to indicate JSON content
     w.Header().Set("Content-Type", "application/json")
     
@@ -35,7 +40,6 @@ func JoinHandler(w http.ResponseWriter, r *http.Request) {
     }
     // Create a JSON response
     response := map[string]string{"token": token, "playerName": username}
-    
     // Write the JSON response
     jsonResponse, err := json.Marshal(response)
     if err != nil {

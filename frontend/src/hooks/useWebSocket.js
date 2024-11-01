@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createComponentLogger } from "../logger";
 
-const log = createComponentLogger("useWebSocket", "info")
+const log = createComponentLogger("useWebSocket", "debug");
 
 const useWebSocket = (url) => {
   const [ws, setWs] = useState(null);
@@ -100,6 +100,8 @@ const useWebSocket = (url) => {
 
   const sendMessage = useCallback(
     (message) => {
+      log.debug("ws status when sending", ws.readyState);
+      log.debug("Sending websocket message", message);
       if (ws) {
         ws.send(JSON.stringify(message));
       } else {

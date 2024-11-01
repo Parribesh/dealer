@@ -4,6 +4,9 @@ import (
 	"dealer-backend/internal/models"
 	"encoding/json"
 	"fmt"
+
+	"log"
+	// "sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -14,12 +17,12 @@ var gameRooms = make(map[string]*models.Game)
 func createRoom(game *models.Game, connections map[string]*websocket.Conn) {
 	gameRooms[game.GameID] = game  // Store game instance by its ID
 	game.ShuffleAndDealCards()
-	
+	StartMessageRouter(connections)
+	// Send initial game state
+	BroadcastAndAck(game, connections, "gamestate")
 	// Start the game loop in a separate goroutine
 	go gameLoop(game, connections)
 
-	// Send initial game state
-	broadcastGameState(game, connections, "gamestate")
 }
 
 func resetHealthForNextTurn(game *models.Game) {
@@ -36,6 +39,35 @@ func resetHealthForNextTurn(game *models.Game) {
     nextPlayer.Health = 100 // or set this to the maximum health/timer value
 
     fmt.Println("Health reset for player", currentTurn, "to", nextPlayer.Health)
+}
+
+
+// ************************** CARD LOGIC ********************************************
+// compareCards compares two cards, giving precedence to suits and then ranks
+func compareCards(card1, card2 *models.Card) int {
+    // If suits are equal, compare ranks
+    return compareRanks(card1.Rank, card2.Rank)
+}
+
+// compareRanks compares ranks of two cards
+func compareRanks(rank1, rank2 models.Rank) int {
+    rankOrder := map[models.Rank]int{
+        "2":  0,
+        "3":  1,
+        "4":  2,
+        "5":  3,
+        "6":  4,
+        "7":  5,
+        "8":  6,
+        "9":  7,
+        "10": 8,
+        "J":  9,
+        "Q":  10,
+        "K":  11,
+        "A":  12,
+    }
+
+    return rankOrder[rank1] - rankOrder[rank2]
 }
 
 func advanceTurn(game *models.Game) {
@@ -79,7 +111,12 @@ func processPlayedCard(game *models.Game, currentPlayer *models.Player) {
     // Apply other game logic for the played card
     
 }
+// ************************** CARD LOGIC - END ********************************************
 
+
+
+
+// ************************** MOVE LOGIC ********************************************
 func allPlayersHavePlayed(game *models.Game) bool {
     // Check if all players have played a card
     if game.State.Player1.PlayedCard == nil {
@@ -97,8 +134,6 @@ func allPlayersHavePlayed(game *models.Game) bool {
 
     return true
 }
-
-
 
 func HandlePlayerMove(gameID string, playerID string, message []byte) {
 	game := gameRooms[gameID]
@@ -129,6 +164,37 @@ func HandlePlayerMove(gameID string, playerID string, message []byte) {
     }
 }
 
+// resetPlayedCards resets the PlayedCard for all players in the game state
+func resetPlayedCards(game *models.Game, connections map[string]*websocket.Conn) {
+	game.State.Player1.RemovePlayedCard()
+    game.State.Player2.RemovePlayedCard()
+    game.State.Player3.RemovePlayedCard()
+    game.State.Player4.RemovePlayedCard()
+	game.State.TrickSuit = ""
+	BroadcastAndAck(game, connections, "resetcardplayed" )
+}
+
+
+// **********************************MOVE LOGIC - END *********************************
+
+
+// ********************************** ROOM STATE LOGIC - END *********************************
+
+func getCurrentPlayer(state *models.GameState, playerNumber int) *models.Player {
+	switch playerNumber {
+	case 1:
+		return &state.Player1
+	case 2:
+		return &state.Player2
+	case 3:
+		return &state.Player3
+	case 4:
+		return &state.Player4
+	default:
+		return nil
+	}
+}
+
 func getPlayerByID(game *models.Game, playerID string) *models.Player {
     if game.State.Player1.ID == playerID {
         return &game.State.Player1
@@ -146,74 +212,52 @@ func getPlayerByID(game *models.Game, playerID string) *models.Player {
 }
 
 
-// compareCards compares two cards, giving precedence to suits and then ranks
-func compareCards(card1, card2 *models.Card) int {
-    // Compare suits first
-    if models.SuitRankings[card1.Suit] > models.SuitRankings[card2.Suit] {
-        return 1 // card1 is higher
-    } else if models.SuitRankings[card1.Suit] < models.SuitRankings[card2.Suit] {
-        return -1 // card2 is higher
-    }
-
-    // If suits are equal, compare ranks
-    return compareRanks(card1.Rank, card2.Rank)
-}
-
-// compareRanks compares ranks of two cards
-func compareRanks(rank1, rank2 models.Rank) int {
-    rankOrder := map[models.Rank]int{
-        "2":  0,
-        "3":  1,
-        "4":  2,
-        "5":  3,
-        "6":  4,
-        "7":  5,
-        "8":  6,
-        "9":  7,
-        "10": 8,
-        "J":  9,
-        "Q":  10,
-        "K":  11,
-        "A":  12,
-    }
-
-    return rankOrder[rank1] - rankOrder[rank2]
-}
-
 func determineTrickWinner(state *models.GameState) *models.Player {
-    var highestCard *models.Card
+    var highestTrumpCard *models.Card
+    var highestSpadeCard *models.Card
+    // var highestOtherCard *models.Card
     var winner *models.Player
     var trumpSuit = state.TrickSuit
-
-    trickSuitPlayed := false
 
     for _, player := range []*models.Player{&state.Player1, &state.Player2, &state.Player3, &state.Player4} {
         if player.PlayedCard != nil {
             playedCard := player.PlayedCard
 
-            // Check if the played card is of the trick suit
-            if playedCard.Suit == trumpSuit {
-                trickSuitPlayed = true
-
-                // Compare using suit rankings and then rank
-                if highestCard == nil || compareCards(playedCard, highestCard) > 0 {
-                    highestCard = playedCard
+            if playedCard.Suit == trumpSuit && highestSpadeCard == nil {
+                // Track the highest card in the trump suit
+                if highestTrumpCard == nil || compareCards(playedCard, highestTrumpCard) > 0 {
+                    highestTrumpCard = playedCard
                     winner = player
                 }
-            } else {
-                // Handle fallback suit logic if trick suit is not played
-                if !trickSuitPlayed {
-                    if highestCard == nil || compareCards(playedCard, highestCard) > 0 {
-                        highestCard = playedCard
-                        winner = player
-                    }
+            } else if playedCard.Suit == "S" {
+                log.Println("Turup played... ")
+                // Track the highest spade card if no trump suit is played
+                if highestSpadeCard == nil || compareCards(playedCard, highestSpadeCard) > 0 {
+                log.Println("Highest spade card set, winner till now.. ", player.ID)
+                    highestSpadeCard = playedCard
+                    winner = player
                 }
-            }
+            } 
+            // else {
+            //     // Track the highest card in other suits if no trump suit or spades are played
+            //     if highestOtherCard == nil || compareCards(playedCard, highestOtherCard) > 0 {
+            //         highestOtherCard = playedCard
+            //         winner = player
+            //     }
+            // }
         }
     }
 
-    return winner
+    // Final decision: priority order spades > trump > other
+    if highestSpadeCard != nil {
+        return winner // highest spade card is the winner
+    } else if highestTrumpCard != nil {
+        return winner //  trump card is the winner if no trump suit is played
+    } else {
+        return winner // otherwise, the highest other card is the winner
+    }
 }
+
 
 // updateGameStateAfterTrick updates the game state after a trick is completed
 func updateGameStateAfterTrick(game *models.Game, winner *models.Player, connections map[string]*websocket.Conn) {
@@ -234,242 +278,93 @@ func updateGameStateAfterTrick(game *models.Game, winner *models.Player, connect
     fmt.Printf("Updated game state: round winner is %s, new score is %d\n", winner.ID, game.State.Scores[winner.ID])
 }
 
-// resetPlayedCards resets the PlayedCard for all players in the game state
-func resetPlayedCards(game *models.Game, connections map[string]*websocket.Conn) {
-	game.State.Player1.RemovePlayedCard()
-    game.State.Player2.RemovePlayedCard()
-    game.State.Player3.RemovePlayedCard()
-    game.State.Player4.RemovePlayedCard()
-	game.State.TrickSuit = ""
-	broadcastAndAck(game, connections, "resetcardplayed" )
+func isGameOver(state *models.GameState) bool {
+    // Check each player's hand for emptiness
+    for _, player := range []*models.Player{&state.Player1, &state.Player2, &state.Player3, &state.Player4} {
+        if len(player.Hand) == 0 { // Assuming Hand is a slice of cards
+            return true // Game is over if any player's hand is empty
+        }
+    }
+    return false // Game continues if all players have cards in their hands
 }
 
 
-func waitForAllAcknowledgments(connections map[string]*websocket.Conn) bool {
-	ackChannel := make(chan string) // Channel to collect acknowledgments
-	timeout := time.After(5 * time.Second) // Set a timeout for acknowledgment
-	expectedAckCount := len(connections)
-
-	// Create a slice to keep track of all player IDs
-	playerIDs := make([]string, 0, expectedAckCount)
-	for playerID := range connections {
-		playerIDs = append(playerIDs, playerID) // Collecting expected player IDs
-	}
-
-	acknowledgedPlayers := make(map[string]bool) // Map to track acknowledged players
-
-	go func() {
-		for _, conn := range connections {
-			// Use an inline struct definition for PlayerMessage
-			var msg struct {
-				Type     string `json:"type"`
-				PlayerID string `json:"playerId"`
-			}
-
-			if err := conn.ReadJSON(&msg); err == nil && msg.Type == "acknowledgment" {
-				ackChannel <- msg.PlayerID // Send the PlayerID of the acknowledging player
-			}
-		}
-	}()
-
-	// Track the number of acknowledgments received
-	ackCount := 0
-	for {
-		select {
-		case playerID := <-ackChannel:
-			ackCount++
-			acknowledgedPlayers[playerID] = true // Mark this player as acknowledged
-			fmt.Println("Received acknowledgment from:", playerID)
-			// Check if we have received acknowledgments from all players
-			if ackCount == expectedAckCount {
-				return true
-			}
-		case <-timeout:
-			// Check which players did not acknowledge
-			var nonAcknowledgedPlayers []string
-			for _, playerID := range playerIDs {
-				if !acknowledgedPlayers[playerID] {
-					nonAcknowledgedPlayers = append(nonAcknowledgedPlayers, playerID)
-				}
-			}
-			fmt.Println("Acknowledgment timeout. Players who did not acknowledge:", nonAcknowledgedPlayers)
-			return false // Return false if timeout occurs
-		}
-	}
-}
 
 
+
+//*************************** MAIN LOOP ***********************************
 
 func gameLoop(game *models.Game, connections map[string]*websocket.Conn) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	fmt.Println("Game loop started")
 
+	// Players := []*models.Player{
+	// 	&game.State.Player1,
+	// 	&game.State.Player2,
+	// 	&game.State.Player3,
+	// 	&game.State.Player4,
+		
+	// }
+    
+	WaitForAllBids(game, connections);
 	
+	// Main Game Loop
 	for range ticker.C {
 		fmt.Println("Game loop ticked")
 		currentPlayerNumber := game.State.Turn
 		currentPlayer := getCurrentPlayer(&game.State, currentPlayerNumber)
-		
+
 		// Check if the player's health has dropped (indicating timer expiration)
 		currentPlayer.Health -= 1
 		fmt.Println("Current player health:", currentPlayer.Health)
-		fmt.Println("Broadcasting game state")
-		broadcastGameState(game, connections, "healthstate")
-		fmt.Println("Game state broadcasted")
+		BroadcastGameState(game, connections, "healthstate")
 		if currentPlayer.Health <= 0 {
 			// Timeout: move to the next player if the current player did not play a card
 			advanceTurn(game)
-			resetHealthForNextTurn(game) // Reset health for the next player
+			resetHealthForNextTurn(game)
 			continue
 		}
 
-		// Allow the current player to play a card (wait for user input or API call)
+		// Wait for the current player to play a card
 		if currentPlayer.PlayedCard == nil {
-			// Wait for the player to play a card via frontend interaction or websocket
-			continue // Skip to next loop iteration until the player plays a card
+			continue
 		}
 
-		// Process the card played by the current player
-        processPlayedCard(game, currentPlayer)
+		// Process the played card
+		processPlayedCard(game, currentPlayer)
 
-		// Validate the played card against the rules
+		// Validate the played card
 		if isValidCard(currentPlayer, game.State.TrickSuit, game.State) {
-			broadcastGameState(game, connections, "cardplayed")
+			BroadcastGameState(game, connections, "cardplayed")
 		} else {
-			// Handle invalid card case (e.g., reset card or prompt the player again)
 			fmt.Println("Invalid card played")
 			continue
 		}
-		// Check if all players have played a card (end of trick)
+
+        hasWinner := false
+		// Check if all players have played (end of trick)
 		if allPlayersHavePlayed(game) {
-			// Determine the winner of the trick based on the leading suit and trump cards
 			winner := determineTrickWinner(&game.State)
-			// Update game state, increment the winner's trick count
+            hasWinner = true
 			updateGameStateAfterTrick(game, winner, connections)
-			broadcastAndAck(game, connections, "trickwon")
-			broadcastAndAck(game, connections, "gamestate")
+			BroadcastAndAck(game, connections, "trickwon")
+			BroadcastGameState(game, connections, "gamestate")
+            game.State.Turn = game.State.GetPlayerPosition(*winner)
 		}
-		// Move to the next player's turn
-		advanceTurn(game)
+
+		// Move to the next turn
+        if !hasWinner {
+		    advanceTurn(game)
+        }
+        if isGameOver(&game.State) {
+            BroadcastGameState(game, connections, "gameover")
+            log.Println("Game Over!! Thank you for playing...")
+            return
+        }
 		resetHealthForNextTurn(game)
 	}
 }
 
-func broadcastAndAck(game *models.Game, connections map[string]*websocket.Conn, broadcastType string){
-	broadcastGameState(game, connections, broadcastType)
-            acknowledgmentReceived := waitForAllAcknowledgments(connections)
-			if acknowledgmentReceived {
-				fmt.Println("Acknowledgment received for ", broadcastType)
-				
-			} else {
-				fmt.Println("No acknowledgment received for game state change. Handling timeout...")
-				// Handle the case where acknowledgment is not received
-				// You might want to prompt the player again or log the incident
-			}
-}
 
-func broadcastGameState(game *models.Game, connections map[string]*websocket.Conn, stateType string) {
-	
-	var message map[string]interface{}
-    var currentPlayer models.Player
 
-    // Determine the current player based on the turn
-    switch game.State.Turn {
-        case 1:
-            currentPlayer = game.State.Player1
-        case 2:
-            currentPlayer = game.State.Player2
-        case 3:
-            currentPlayer = game.State.Player3
-        case 4:
-            currentPlayer = game.State.Player4
-        default:
-            // Handle cases where Turn doesn't match (optional)
-            currentPlayer = models.Player{}
-        }
-	// Assuming game is of type *models.Game
-	if stateType == "gamestate" {
-		message = map[string]interface{}{
-			"type": stateType,
-			"data": game, // Send the full game object if stateType is "gamestate"
-		}
-	} else if stateType == "healthstate" {
-		
-
-		message = map[string]interface{}{
-			"type": stateType,
-			"data": map[string]interface{}{
-				"player": currentPlayer.ID,  // Use current player ID
-				"health": currentPlayer.Health,  // Use current player Health
-			},
-		}
-
-	}else if stateType == "cardplayed" {
-		message = map[string]interface{}{
-			"type": stateType,
-			"data": map[string]interface{}{
-				"playerId": currentPlayer.ID,  // Use current player ID
-				"card": currentPlayer.PlayedCard,  // Use current player Health
-			},
-		}
-    } else if stateType == "trickwon" {
-		message = map[string]interface{}{
-			"type": stateType,
-			"data": map[string]interface{}{
-				"player": game.State.RoundWinner,  // Use current player ID
-				"score": game.State.RoundWinner.Score,
-			}, 
-		}
-    }else if stateType == "resetcardplayed" {
-		message = map[string]interface{}{
-			"type": stateType,
-		}
-    }
-	
-	
-	jsonMessage, err := json.Marshal(message)
-	if err != nil {
-		// Handle error (e.g., log it)
-		return
-	}
-
-	for _, conn := range connections {
-		err := conn.WriteMessage(websocket.TextMessage, jsonMessage)
-		if err != nil {
-			// Handle error (e.g., log it or remove the connection)
-		}
-	}
-}
-
-func getCurrentPlayer(state *models.GameState, playerNumber int) *models.Player {
-	switch playerNumber {
-	case 1:
-		return &state.Player1
-	case 2:
-		return &state.Player2
-	case 3:
-		return &state.Player3
-	case 4:
-		return &state.Player4
-	default:
-		return nil
-	}
-}
-
-func isGameOver(state *models.GameState) bool {
-	playersAlive := 0
-	if state.Player1.Health > 0 {
-		playersAlive++
-	}
-	if state.Player2.Health > 0 {
-		playersAlive++
-	}
-	if state.Player3.Health > 0 {
-		playersAlive++
-	}
-	if state.Player4.Health > 0 {
-		playersAlive++
-	}
-	return playersAlive <= 1
-}

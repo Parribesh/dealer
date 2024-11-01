@@ -4,10 +4,10 @@ import useGameState from "../hooks/useGameState";
 const GameStateContext = createContext();
 
 export const GameStateProvider = ({ children }) => {
-  const { gameState, updateGameState, updateHealthState, updatePlayedCardState } = useGameState();
+  const { gameState, updateGameState, updateHealthState, updatePlayedCardState, updateBidState } = useGameState();
   return (
     <GameStateContext.Provider
-      value={{ gameState, updateGameState, updateHealthState, updatePlayedCardState }}
+      value={{ gameState, updateGameState, updateHealthState, updatePlayedCardState, updateBidState }}
     >
       {children}
     </GameStateContext.Provider>

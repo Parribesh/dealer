@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useWebSocketContext } from "../context/WebSocketContext";
 import styled from "styled-components";
 import { useGameStateContext } from "../context/GameStateContext";
@@ -7,7 +7,7 @@ import { usePlayerContext } from "../context/PlayerContext";
 import { createComponentLogger } from "../logger";
 import Scoreboard from "./ScoreBoard";
 
-const log = createComponentLogger("GameContainer", "info");
+const log = createComponentLogger("GameContainer", "debug");
 
 const GameContainer = styled.div`
   background: #1a1a2e;
@@ -19,6 +19,17 @@ const GameContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
+`;
+// (Other styled components here...)
+
+const BidInputContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 20px;
+  background: #16213e;
+  padding: 20px;
+  border-radius: 10px;
 `;
 
 const GameHeader = styled.div`
@@ -129,20 +140,22 @@ const BottomRow = styled.div`
 `;
 
 const Game = () => {
-  const { gameState, updateGameState, updateHealthState } =
+  const { gameState, updateGameState, updateHealthState, updateBidState } =
     useGameStateContext();
   const { lastMessage, userId, sendMessage } = useWebSocketContext();
   const { player, setPlayer } = usePlayerContext();
   const [selectedCards, setSelectedCards] = useState({});
   const [trickWinner, setTrickWinner] = useState(null);
-
+  const [hasBid, setHasBid] = useState(false);
+  const [bid, setBid] = useState(1);
+  const navigate = useNavigate();
   useEffect(() => {
     if (lastMessage) {
       const { type, data } = lastMessage;
       if (type.toLowerCase() === "gamestate") {
         log.debug("updating game state", data);
         updateGameState(data);
-        acknowledgeGameState(player);
+        acknowledgeGameState(player.id);
       }
       if (type.toLowerCase() === "healthstate") {
         updateHealthState(data);
@@ -164,11 +177,34 @@ const Game = () => {
       }
       if (type.toLowerCase() === "resetcardplayed") {
         setSelectedCards({});
+        acknowledgeGameState();
+      }
+      if (type.toLowerCase() === "biddingcomplete") {
+        setHasBid(true);
+      }
+      if (type.toLowerCase() === "bidupdate") {
+        log.debug("bidupdate received...");
+        updateBidState(data);
+        log.debug("acknowledging...");
+        acknowledgeGameState(player.id);
       }
       if (type.toLowerCase() === "trickwon") {
         // updateHealthState(data);
         setSelectedCards(null);
         setTrickWinner(data.player);
+        acknowledgeGameState(player.id);
+      }
+      if (type.toLowerCase() === "updatebid") {
+        // updateHealthState(data);
+
+        log.debug("You haven't undpated your bid, send bid again....");
+        submitBid();
+      }
+      if (type.toLowerCase() === "gameover") {
+        // updateHealthState(data);
+
+        log.debug("GameOver!!");
+        navigate("/");
       }
     }
   }, [lastMessage]);
@@ -192,6 +228,15 @@ const Game = () => {
     } catch (error) {
       log.error("Error sending move:", error);
     }
+  };
+
+  const submitBid = () => {
+    log.debug("Sending bid for player", userId, "with bid: ", bid);
+    sendMessage({
+      type: "placebid",
+      playerId: userId,
+      bid: parseInt(bid),
+    });
   };
 
   const { GameID, Players, State } = gameState || {};
@@ -238,38 +283,50 @@ const Game = () => {
       </PlayersContainer>
 
       <CentralArea>
-        {trickWinner && (
+        {!hasBid ? (
+          <BidInputContainer>
+            <h2>Place Your Bid</h2>
+            <input
+              type="number"
+              value={bid}
+              onChange={(e) => setBid(e.target.value)}
+              placeholder="Enter your bid"
+            />
+            <button onClick={submitBid}>Submit Bid</button>
+          </BidInputContainer>
+        ) : (
           <>
-            <div>Winner {trickWinner.id}</div>
-            <div>Score {trickWinner.score}</div>
+            {trickWinner && (
+              <>
+                <div>Winner {trickWinner.id}</div>
+                <div>Score {trickWinner.score}</div>
+              </>
+            )}
+            <DeckGrid>
+              {Players.map((playerId) => {
+                let selectedCard = "";
+                if (selectedCards && selectedCards[playerId]) {
+                  selectedCard = selectedCards[playerId];
+                  log.debug("selectedCard: ", selectedCard);
+                }
+                return (
+                  <CardContainer key={playerId}>
+                    <div>{playerId}</div>
+                    {selectedCard ? (
+                      <Card suit={selectedCard.suit} hidden={false}>
+                        {`${selectedCard.rank}${getSuitSymbol(
+                          selectedCard.suit
+                        )}`}
+                      </Card>
+                    ) : (
+                      <Card hidden={true}>🂠</Card>
+                    )}
+                  </CardContainer>
+                );
+              })}
+            </DeckGrid>
           </>
         )}
-        <DeckGrid>
-          {Players.map((playerId) => {
-            let selectedCard = "";
-            if (selectedCards && selectedCards[playerId]) {
-              selectedCard = selectedCards[playerId];
-              log.debug("selectedCard: ", selectedCard);
-              // Proceed with your logic
-            } else {
-              // console.warn(
-              // selectedCards is either null or ${playerId} is not present.
-              //);
-            }
-            return (
-              <CardContainer key={playerId}>
-                <div>{playerId}</div>
-                {selectedCard ? (
-                  <Card suit={selectedCard.suit} hidden={false}>
-                    {`${selectedCard.rank}${getSuitSymbol(selectedCard.suit)}`}
-                  </Card>
-                ) : (
-                  <Card hidden={true}>🂠</Card>
-                )}
-              </CardContainer>
-            );
-          })}
-        </DeckGrid>
         <Scoreboard gameState={gameState} />
       </CentralArea>
 

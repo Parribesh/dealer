@@ -35,6 +35,7 @@ const JoinLobby = () => {
       const response = await axios.post(
         `http://localhost:8080/lobby/join?username=${playerName}`
       );
+      setPlayerName(response.data.playerName);
       const jwtToken = response.data.token;
       localStorage.setItem("jwtToken", jwtToken);
       setToken(jwtToken);

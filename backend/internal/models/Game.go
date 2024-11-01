@@ -169,6 +169,21 @@ func (pc *PlayerConnections) PingPlayerConnection(playerID string) {
 	}()
 }
 
+func (gs *GameState) GetPlayerPosition(p Player) int {
+    switch {
+    case gs.Player1.ID == p.ID:
+        return 1
+    case gs.Player2.ID == p.ID:
+        return 2
+    case gs.Player3.ID == p.ID:
+        return 3
+    case gs.Player4.ID == p.ID:
+        return 4
+    default:
+        return 0
+    }
+}
+
 func (pc *PlayerConnections) AddPlayer(playerID string, conn *websocket.Conn) {
 	fmt.Println("Starting AddPlayer for", playerID)
 	pc.mu.Lock()
